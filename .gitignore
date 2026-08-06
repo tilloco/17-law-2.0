@@ -1,0 +1,11 @@
+# Rust
+target/
+
+# Secrets
+.env
+
+# VS Code
+.vscode/
+
+# Logs
+*.log
