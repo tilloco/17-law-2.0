@@ -35,3 +35,12 @@ pub struct OptionView {
     pub id: Uuid,
     pub text: String,
 }
+#[derive(Debug, Serialize)]
+pub struct Material {
+    pub id: Uuid,
+    pub category: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub pdf_url: String,
+    pub is_premium: bool,
+}

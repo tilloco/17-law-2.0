@@ -54,9 +54,10 @@ pub fn build_router(state: AppState) -> Router {
         .route("/admin/stats", get(admin::get_stats))
         .route("/admin/users", get(admin::list_users))
         .route(
-            "/admin/quizzes",
-            get(admin::list_quizzes_admin).post(admin::create_quiz),
-        )
+    "/admin/quizzes",
+    get(admin::list_quizzes_admin).post(admin::create_quiz),
+)
+.route("/admin/materials", post(admin::upload_material))
         .route("/admin/quizzes/:id", axum::routing::delete(admin::delete_quiz))
         .route("/admin/quizzes/:id/questions", post(admin::add_question))
         .route("/admin/questions/:id/options", post(admin::add_option))

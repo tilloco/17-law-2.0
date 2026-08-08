@@ -1,6 +1,7 @@
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::Json;
+use axum_extra::extract::Multipart;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -334,4 +335,123 @@ pub async fn publish_quiz(
         .await?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+// ---------------------------------------------------------------------
+// Materials — topic PDFs (premium study content)
+// ---------------------------------------------------------------------
+
+pub async fn upload_material(
+    State(state): State<AppState>,
+    AdminUser(_admin): AdminUser,
+    mut multipart: Multipart,
+) -> Result<Json<CreatedId>, AppError> {
+    let mut category = String::new();
+    let mut title = String::new();
+    let mut description: Option<String> = None;
+    let mut is_premium = true;
+    let mut file_bytes: Option<Vec<u8>> = None;
+    let mut file_name = String::from("material.pdf");
+
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| AppError::BadRequest(e.to_string()))?
+    {
+        let name = field.name().unwrap_or("").to_string();
+        match name.as_str() {
+            "category" => {
+                category = field
+                    .text()
+                    .await
+                    .map_err(|e| AppError::BadRequest(e.to_string()))?;
+            }
+            "title" => {
+                title = field
+                    .text()
+                    .await
+                    .map_err(|e| AppError::BadRequest(e.to_string()))?;
+            }
+            "description" => {
+                let val = field
+                    .text()
+                    .await
+                    .map_err(|e| AppError::BadRequest(e.to_string()))?;
+                if !val.is_empty() {
+                    description = Some(val);
+                }
+            }
+            "is_premium" => {
+                let val = field
+                    .text()
+                    .await
+                    .map_err(|e| AppError::BadRequest(e.to_string()))?;
+                is_premium = val == "true";
+            }
+            "file" => {
+                if let Some(fname) = field.file_name() {
+                    file_name = fname.to_string();
+                }
+                file_bytes = Some(
+                    field
+                        .bytes()
+                        .await
+                        .map_err(|e| AppError::BadRequest(e.to_string()))?
+                        .to_vec(),
+                );
+            }
+            _ => {}
+        }
+    }
+
+    let bytes = file_bytes.ok_or_else(|| AppError::BadRequest("missing file".into()))?;
+
+    let storage_path = format!("{}-{}", Uuid::new_v4(), file_name);
+
+    let supabase_url =
+        std::env::var("SUPABASE_URL").map_err(|e| AppError::Internal(anyhow::anyhow!(e)))?;
+    let supabase_key = std::env::var("SUPABASE_SERVICE_KEY")
+        .map_err(|e| AppError::Internal(anyhow::anyhow!(e)))?;
+    let bucket =
+        std::env::var("SUPABASE_BUCKET").map_err(|e| AppError::Internal(anyhow::anyhow!(e)))?;
+
+    let upload_url = format!(
+        "{}/storage/v1/object/{}/{}",
+        supabase_url, bucket, storage_path
+    );
+
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(&upload_url)
+        .header("Authorization", format!("Bearer {}", supabase_key))
+        .header("Content-Type", "application/pdf")
+        .body(bytes)
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!(e)))?;
+
+    if !resp.status().is_success() {
+        return Err(AppError::Internal(anyhow::anyhow!(
+            "supabase upload failed"
+        )));
+    }
+
+    let pdf_url = format!(
+        "{}/storage/v1/object/public/{}/{}",
+        supabase_url, bucket, storage_path
+    );
+
+    let material_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO materials (category, title, description, pdf_url, is_premium)
+         VALUES ($1, $2, $3, $4, $5) RETURNING id",
+    )
+    .bind(&category)
+    .bind(&title)
+    .bind(&description)
+    .bind(&pdf_url)
+    .bind(is_premium)
+    .fetch_one(&state.db)
+    .await?;
+
+    Ok(Json(CreatedId { id: material_id }))
 }
