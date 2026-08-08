@@ -424,6 +424,7 @@ pub async fn upload_material(
     let resp = client
         .post(&upload_url)
         .header("Authorization", format!("Bearer {}", supabase_key))
+        .header("apikey", &supabase_key)
         .header("Content-Type", "application/pdf")
         .body(bytes)
         .send()
@@ -431,11 +432,14 @@ pub async fn upload_material(
         .map_err(|e| AppError::Internal(anyhow::anyhow!(e)))?;
 
     if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
         return Err(AppError::Internal(anyhow::anyhow!(
-            "supabase upload failed"
+            "supabase upload failed: {} - {}",
+            status,
+            body
         )));
     }
-
     let pdf_url = format!(
         "{}/storage/v1/object/public/{}/{}",
         supabase_url, bucket, storage_path
