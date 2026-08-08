@@ -5,33 +5,30 @@ pub mod quizzes;
 use axum::http::HeaderValue;
 use axum::routing::{get, post};
 use axum::Router;
-use tower_http::cors::{AllowOrigin, CorsLayer};
+use tower_http::cors::CorsLayer;
 
 use crate::AppState;
 
 pub fn build_router(state: AppState) -> Router {
-    // Cookies (used for the session) require an exact origin, not `Any`,
-    // once credentials are involved. Local dev is always allowed; the
-    // production frontend comes from FRONTEND_ORIGIN (see config.rs).
-    let mut allowed_origins = vec!["http://localhost:5173".parse::<HeaderValue>().unwrap()];
-    if let Ok(prod_origin) = state.config.frontend_origin.parse::<HeaderValue>() {
-        if !allowed_origins.contains(&prod_origin) {
-            allowed_origins.push(prod_origin);
-        }
-    }
-
+    // Cookies (used for the session) require exact origins, not `Any`,
+    // once credentials are involved. Add every real frontend origin here —
+    // local dev AND production. Missing one means that origin's requests
+    // get silently blocked by the browser, not a helpful error.
+    let allowed_origins = [
+        "http://localhost:5173",
+        "https://17law-frontend-psi.vercel.app",
+        // "https://huquq17.com",       // uncomment once the custom domain is live
+        // "https://www.huquq17.com",
+    ];
     let cors = CorsLayer::new()
-        .allow_origin(AllowOrigin::list(allowed_origins))
-.allow_methods([
-    axum::http::Method::GET,
-    axum::http::Method::POST,
-    axum::http::Method::DELETE,
-    axum::http::Method::OPTIONS,
-])        .allow_headers([
-    axum::http::header::AUTHORIZATION,
-    axum::http::header::CONTENT_TYPE,
-    axum::http::header::ACCEPT,
-])
+        .allow_origin(
+            allowed_origins
+                .iter()
+                .map(|o| o.parse::<HeaderValue>().unwrap())
+                .collect::<Vec<_>>(),
+        )
+        .allow_methods(tower_http::cors::Any)
+        .allow_headers(tower_http::cors::Any)
         .allow_credentials(true);
 
     Router::new()
@@ -46,7 +43,13 @@ pub fn build_router(state: AppState) -> Router {
             "/quizzes/:id/like",
             post(quizzes::like_quiz).delete(quizzes::unlike_quiz),
         )
-        .route("/admin/quizzes", post(admin::create_quiz))
+        .route("/admin/stats", get(admin::get_stats))
+        .route("/admin/users", get(admin::list_users))
+        .route(
+            "/admin/quizzes",
+            get(admin::list_quizzes_admin).post(admin::create_quiz),
+        )
+        .route("/admin/quizzes/:id", axum::routing::delete(admin::delete_quiz))
         .route("/admin/quizzes/:id/questions", post(admin::add_question))
         .route("/admin/questions/:id/options", post(admin::add_option))
         .route("/admin/quizzes/:id/publish", post(admin::publish_quiz))
