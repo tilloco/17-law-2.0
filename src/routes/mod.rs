@@ -27,8 +27,14 @@ pub fn build_router(state: AppState) -> Router {
                 .map(|o| o.parse::<HeaderValue>().unwrap())
                 .collect::<Vec<_>>(),
         )
-        .allow_methods(tower_http::cors::Any)
-        .allow_headers(tower_http::cors::Any)
+        .allow_methods([
+            axum::http::Method::GET,
+            axum::http::Method::POST,
+            axum::http::Method::DELETE,
+            axum::http::Method::PUT,
+            axum::http::Method::PATCH,
+        ])
+        .allow_headers([axum::http::header::CONTENT_TYPE])
         .allow_credentials(true);
 
     Router::new()
