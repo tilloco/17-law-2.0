@@ -28,6 +28,7 @@ struct QuizSummaryRow {
     difficulty: String,
     like_count: i64,
     liked_by_me: bool,
+    question_count: i64,
 }
 
 // `user` here is optional: NOTE this relies on axum's blanket `Option<T>`
@@ -51,7 +52,8 @@ pub async fn list_quizzes(
             COUNT(DISTINCT ql.user_id) AS like_count,
             EXISTS (
                 SELECT 1 FROM quiz_likes WHERE quiz_id = q.id AND user_id = $2
-            ) AS liked_by_me
+            ) AS liked_by_me,
+            (SELECT COUNT(*) FROM questions WHERE quiz_id = q.id) AS question_count
         FROM quizzes q
         JOIN quiz_translations qt ON qt.quiz_id = q.id AND qt.language_code = $1
         LEFT JOIN quiz_likes ql ON ql.quiz_id = q.id
@@ -59,6 +61,7 @@ pub async fn list_quizzes(
         GROUP BY q.id, qt.title, qt.description, q.category, q.difficulty
         ORDER BY q.created_at DESC
         "#,
+    
     )
     .bind(&params.lang)
     .bind(user_id)
@@ -75,6 +78,7 @@ pub async fn list_quizzes(
             difficulty: r.difficulty,
             like_count: r.like_count,
             liked_by_me: r.liked_by_me,
+            question_count: r.question_count,
         })
         .collect();
 

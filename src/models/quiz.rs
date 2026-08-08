@@ -10,6 +10,7 @@ pub struct QuizSummary {
     pub difficulty: String,
     pub like_count: i64,
     pub liked_by_me: bool,
+    pub question_count: i64,
 }
 
 #[derive(Debug, Serialize)]
