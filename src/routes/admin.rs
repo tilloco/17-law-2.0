@@ -419,8 +419,10 @@ pub async fn upload_material(
         "{}/storage/v1/object/{}/{}",
         supabase_url, bucket, storage_path
     );
-
-    let client = reqwest::Client::new();
+let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| AppError::Internal(anyhow::anyhow!(e)))?;
     let resp = client
         .post(&upload_url)
         .header("Authorization", format!("Bearer {}", supabase_key))
