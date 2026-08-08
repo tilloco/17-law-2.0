@@ -1,5 +1,6 @@
 pub mod admin;
 pub mod auth;
+pub mod dashboard;
 pub mod quizzes;
 
 use axum::http::HeaderValue;
@@ -48,7 +49,8 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/quizzes/:id/like",
             post(quizzes::like_quiz).delete(quizzes::unlike_quiz),
-        )
+        ).route("/me/stats", get(dashboard::my_stats))
+.route("/me/attempts", get(dashboard::my_attempts))
         .route("/admin/stats", get(admin::get_stats))
         .route("/admin/users", get(admin::list_users))
         .route(
