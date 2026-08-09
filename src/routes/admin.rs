@@ -6,7 +6,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::auth::extractors::AdminUser;
+use crate::auth::extractors::{AdminUser,TeacherUser};
 use crate::error::AppError;
 use crate::AppState;
 
@@ -460,4 +460,50 @@ let client = reqwest::Client::builder()
     .await?;
 
     Ok(Json(CreatedId { id: material_id }))
+}
+#[derive(Deserialize)]
+pub struct CourseTranslationInput {
+    pub language_code: String,
+    pub title: String,
+    pub description: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct CreateCourseRequest {
+    pub category: String,
+    pub price_usd: Option<f64>,
+    pub translations: Vec<CourseTranslationInput>,
+}
+
+pub async fn create_course(
+    State(state): State<AppState>,
+    TeacherUser(admin): TeacherUser,
+    Json(payload): Json<CreateCourseRequest>,
+) -> Result<Json<CreatedId>, AppError> {
+    let mut tx = state.db.begin().await?;
+
+    let course_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO courses (teacher_id, category, price_usd) VALUES ($1, $2, $3) RETURNING id",
+    )
+    .bind(admin.user_id)
+    .bind(&payload.category)
+    .bind(payload.price_usd)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    for t in &payload.translations {
+        sqlx::query(
+            "INSERT INTO course_translations (course_id, language_code, title, description)
+             VALUES ($1, $2, $3, $4)",
+        )
+        .bind(course_id)
+        .bind(&t.language_code)
+        .bind(&t.title)
+        .bind(&t.description)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    tx.commit().await?;
+    Ok(Json(CreatedId { id: course_id }))
 }

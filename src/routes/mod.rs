@@ -62,6 +62,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/admin/quizzes/:id/questions", post(admin::add_question))
         .route("/admin/questions/:id/options", post(admin::add_option))
         .route("/admin/quizzes/:id/publish", post(admin::publish_quiz))
+        .route("/admin/courses", post(admin::create_course))
        .layer(axum::extract::DefaultBodyLimit::max(20 * 1024 * 1024))
         .with_state(state)
         .layer(cors)
